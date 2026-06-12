@@ -1,3 +1,5 @@
+DROP DATABASE IF EXISTS biomed_db;
+
 CREATE DATABASE IF NOT EXISTS biomed_db;
 
 USE biomed_db;
@@ -18,7 +20,6 @@ CREATE TABLE patients(
     last_name VARCHAR(50) NOT NULL,
     patronym VARCHAR(50) NOT NULL,
     date_of_birth DATE NOT NULL,
-    age INT GENERATED ALWAYS AS (TIMESTAMPDIFF(YEAR, date_of_birth, CURDATE())) STORED,
     sex VARCHAR(10) NOT NULL CHECK(sex IN ('Άρρεν', 'Θήλυ', 'Άλλο')),
     weight DECIMAL(5,2),
     height DECIMAL(3,2),
@@ -125,3 +126,176 @@ CREATE TABLE has_allergy(
     CONSTRAINT fk_has_allergy_active_substances FOREIGN KEY(substance_id) REFERENCES active_substances(substance_id)
     ON DELETE CASCADE ON UPDATE CASCADE
 )ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
+
+CREATE TABLE doc_visits(
+    visit_id INT NOT NULL AUTO_INCREMENT,
+    visit_datetime DATETIME NOT NULL,
+    patient_AMKA CHAR(11) NOT NULL,
+    doctor_AMKA CHAR(11) NOT NULL,
+    PRIMARY KEY(visit_id),
+    CONSTRAINT fk_doc_visits_patients FOREIGN KEY(patient_AMKA) REFERENCES patients(AMKA)
+    ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT fk_doc_visits_doctors FOREIGN KEY(doctor_AMKA) REFERENCES doctors(AMKA)
+    ON DELETE RESTRICT ON UPDATE CASCADE
+)ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
+
+CREATE TABLE prescriptions(
+    prescription_id INT NOT NULL AUTO_INCREMENT,
+    start_date DATE NOT NULL,
+    end_date DATE,
+    dosage VARCHAR(50) NOT NULL,
+    frequency VARCHAR(50) NOT NULL,
+    patient_AMKA CHAR(11) NOT NULL,
+    doctor_AMKA CHAR(11) NOT NULL,
+    med_id INT NOT NULL,
+    visit_id INT,
+    PRIMARY KEY(prescription_id),
+    CONSTRAINT fk_prescriptions_patients FOREIGN KEY(patient_AMKA) REFERENCES patients(AMKA)
+    ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT fk_prescriptions_doctors FOREIGN KEY(doctor_AMKA) REFERENCES doctors(AMKA)
+    ON DELETE RESTRICT ON UPDATE CASCADE,
+    CONSTRAINT fk_prescriptions_medications FOREIGN KEY(med_id) REFERENCES medications(med_id)
+    ON DELETE RESTRICT ON UPDATE CASCADE,
+    CONSTRAINT fk_prescriptions_doc_visits FOREIGN KEY(visit_id) REFERENCES doc_visits(visit_id)
+    ON DELETE SET NULL ON UPDATE CASCADE,
+    CHECK(end_date IS NULL OR end_date >= start_date)
+)ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
+
+CREATE TABLE referrals(
+    referral_id INT NOT NULL AUTO_INCREMENT,
+    issue_date DATE NOT NULL,
+    expiration_date DATE,
+    patient_AMKA CHAR(11) NOT NULL,
+    doctor_AMKA CHAR(11) NOT NULL,
+    lab_test_id INT NOT NULL,
+    visit_id INT,
+    PRIMARY KEY(referral_id),
+    CONSTRAINT fk_referrals_patients FOREIGN KEY(patient_AMKA) REFERENCES patients(AMKA)
+    ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT fk_referrals_doctors FOREIGN KEY(doctor_AMKA) REFERENCES doctors(AMKA)
+    ON DELETE RESTRICT ON UPDATE CASCADE,
+    CONSTRAINT fk_referrals_lab_tests FOREIGN KEY(lab_test_id) REFERENCES lab_tests(lab_test_id)
+    ON DELETE RESTRICT ON UPDATE CASCADE,
+    CONSTRAINT fk_referrals_doc_visits FOREIGN KEY(visit_id) REFERENCES doc_visits(visit_id)
+    ON DELETE SET NULL ON UPDATE CASCADE,
+    CHECK(expiration_date IS NULL OR expiration_date >= issue_date)
+)ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
+
+CREATE TABLE ex_lab_tests(
+    ex_lab_test_id INT NOT NULL AUTO_INCREMENT,
+    datetime DATETIME NOT NULL,
+    results TEXT,
+    cost DECIMAL(8,2),
+    patient_AMKA CHAR(11) NOT NULL,
+    lab_test_id INT NOT NULL,
+    referral_id INT,
+    PRIMARY KEY(ex_lab_test_id),
+    CONSTRAINT fk_ex_lab_tests_patients FOREIGN KEY(patient_AMKA) REFERENCES patients(AMKA)
+    ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT fk_ex_lab_tests_lab_tests FOREIGN KEY(lab_test_id) REFERENCES lab_tests(lab_test_id)
+    ON DELETE RESTRICT ON UPDATE CASCADE,
+    CONSTRAINT fk_ex_lab_tests_referrals FOREIGN KEY(referral_id) REFERENCES referrals(referral_id)
+    ON DELETE SET NULL ON UPDATE CASCADE,
+    CHECK(cost IS NULL OR cost >= 0)
+)ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
+
+CREATE TABLE diagnosis_history(
+    diagnosis_id INT NOT NULL AUTO_INCREMENT,
+    ICD10_code VARCHAR(10) NOT NULL,
+    diagnosis_date DATE NOT NULL,
+    patient_AMKA CHAR(11) NOT NULL,
+    PRIMARY KEY(diagnosis_id),
+    CONSTRAINT fk_diagnosis_history_diagnosis FOREIGN KEY(ICD10_code) REFERENCES diagnosis(ICD10_code)
+    ON DELETE RESTRICT ON UPDATE CASCADE,
+    CONSTRAINT fk_diagnosis_history_patients FOREIGN KEY(patient_AMKA) REFERENCES patients(AMKA)
+    ON DELETE CASCADE ON UPDATE CASCADE
+)ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
+
+CREATE TABLE hospitalizations(
+    hospitalization_id INT NOT NULL AUTO_INCREMENT,
+    date_of_admission DATE NOT NULL,
+    date_of_discharge DATE,
+    patient_AMKA CHAR(11) NOT NULL,
+    hospital_id INT NOT NULL,
+    PRIMARY KEY(hospitalization_id),
+    CONSTRAINT fk_hospitalizations_patients FOREIGN KEY(patient_AMKA) REFERENCES patients(AMKA)
+    ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT fk_hospitalizations_hospitals FOREIGN KEY(hospital_id) REFERENCES hospitals(hospital_id)
+    ON DELETE RESTRICT ON UPDATE CASCADE,
+    CHECK(date_of_discharge IS NULL OR date_of_discharge >= date_of_admission)
+)ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
+
+CREATE TABLE has_address(
+    AMKA CHAR(11) NOT NULL,
+    address_id INT NOT NULL,
+    PRIMARY KEY(AMKA, address_id),
+    CONSTRAINT fk_has_address_patients FOREIGN KEY(AMKA) REFERENCES patients(AMKA)
+    ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT fk_has_address_addresses FOREIGN KEY(address_id) REFERENCES addresses(address_id)
+    ON DELETE RESTRICT ON UPDATE CASCADE
+)ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
+
+CREATE TABLE has_provider(
+    AMKA CHAR(11) NOT NULL,
+    provider_id INT NOT NULL,
+    PRIMARY KEY(AMKA, provider_id),
+    CONSTRAINT fk_has_provider_patients FOREIGN KEY(AMKA) REFERENCES patients(AMKA)
+    ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT fk_has_provider_insurance_providers FOREIGN KEY(provider_id) REFERENCES insurance_providers(provider_id)
+    ON DELETE RESTRICT ON UPDATE CASCADE
+)ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
+
+CREATE INDEX idx_patients_last_name ON patients(last_name);
+CREATE INDEX idx_doctors_last_name ON doctors(last_name);
+CREATE INDEX idx_doc_visits_patient ON doc_visits(patient_AMKA);
+CREATE INDEX idx_doc_visits_doctor ON doc_visits(doctor_AMKA);
+CREATE INDEX idx_doc_visits_datetime ON doc_visits(visit_datetime);
+CREATE INDEX idx_prescriptions_patient ON prescriptions(patient_AMKA);
+CREATE INDEX idx_prescriptions_doctor ON prescriptions(doctor_AMKA);
+CREATE INDEX idx_prescriptions_medication ON prescriptions(med_id);
+CREATE INDEX idx_referrals_patient ON referrals(patient_AMKA);
+CREATE INDEX idx_referrals_doctor ON referrals(doctor_AMKA);
+CREATE INDEX idx_ex_lab_tests_patient ON ex_lab_tests(patient_AMKA);
+CREATE INDEX idx_diagnosis_history_patient ON diagnosis_history(patient_AMKA);
+CREATE INDEX idx_hospitalizations_patient ON hospitalizations(patient_AMKA);
+
+CREATE VIEW patient_age_view AS
+SELECT
+    AMKA,
+    first_name,
+    last_name,
+    date_of_birth,
+    TIMESTAMPDIFF(YEAR, date_of_birth, CURDATE()) AS age
+FROM patients;
+
+CREATE VIEW patient_medical_summary AS
+SELECT
+    p.AMKA,
+    p.first_name,
+    p.last_name,
+    p.date_of_birth,
+    TIMESTAMPDIFF(YEAR, p.date_of_birth, CURDATE()) AS age,
+    p.sex,
+    p.email,
+    p.nationality,
+    COUNT(DISTINCT dv.visit_id) AS total_visits,
+    COUNT(DISTINCT pr.prescription_id) AS total_prescriptions,
+    COUNT(DISTINCT rf.referral_id) AS total_referrals,
+    COUNT(DISTINCT elt.ex_lab_test_id) AS total_lab_tests,
+    COUNT(DISTINCT dh.diagnosis_id) AS total_diagnoses,
+    COUNT(DISTINCT hp.hospitalization_id) AS total_hospitalizations
+FROM patients p
+LEFT JOIN doc_visits dv ON p.AMKA = dv.patient_AMKA
+LEFT JOIN prescriptions pr ON p.AMKA = pr.patient_AMKA
+LEFT JOIN referrals rf ON p.AMKA = rf.patient_AMKA
+LEFT JOIN ex_lab_tests elt ON p.AMKA = elt.patient_AMKA
+LEFT JOIN diagnosis_history dh ON p.AMKA = dh.patient_AMKA
+LEFT JOIN hospitalizations hp ON p.AMKA = hp.patient_AMKA
+GROUP BY
+    p.AMKA,
+    p.first_name,
+    p.last_name,
+    p.date_of_birth,
+    p.sex,
+    p.email,
+    p.nationality;
