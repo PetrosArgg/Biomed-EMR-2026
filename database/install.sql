@@ -1,7 +1,5 @@
 DROP DATABASE IF EXISTS biomed_db;
-
 CREATE DATABASE IF NOT EXISTS biomed_db;
-
 USE biomed_db;
 
 CREATE TABLE doctors(
@@ -299,3 +297,111 @@ GROUP BY
     p.sex,
     p.email,
     p.nationality;
+
+DELIMITER //
+
+CREATE TRIGGER prevent_allergic_reactions_insert
+BEFORE INSERT ON prescriptions
+FOR EACH ROW
+BEGIN
+    IF EXISTS (
+        SELECT 1
+        FROM med_contains mc
+        JOIN has_allergy ha ON mc.substance_id = ha.substance_id
+        WHERE mc.med_id = NEW.med_id
+          AND ha.AMKA = NEW.patient_AMKA
+    ) THEN
+        SIGNAL SQLSTATE '45000'
+        SET MESSAGE_TEXT = 'Prescription rejected: patient is allergic to one or more active substances of this medication.';
+    END IF;
+END//
+
+CREATE TRIGGER prevent_allergic_reactions_update
+BEFORE UPDATE ON prescriptions
+FOR EACH ROW
+BEGIN
+    IF EXISTS (
+        SELECT 1
+        FROM med_contains mc
+        JOIN has_allergy ha ON mc.substance_id = ha.substance_id
+        WHERE mc.med_id = NEW.med_id
+          AND ha.AMKA = NEW.patient_AMKA
+    ) THEN
+        SIGNAL SQLSTATE '45000'
+        SET MESSAGE_TEXT = 'Prescription update rejected: patient is allergic to one or more active substances of this medication.';
+    END IF;
+END//
+
+DELIMITER ;
+
+DELIMITER //
+
+CREATE TRIGGER prescriptions_visit_consistency_insert
+BEFORE INSERT ON prescriptions
+FOR EACH ROW
+BEGIN
+    IF NEW.visit_id IS NOT NULL AND NOT EXISTS (
+        SELECT 1
+        FROM doc_visits dv
+        WHERE dv.visit_id = NEW.visit_id
+          AND dv.patient_AMKA = NEW.patient_AMKA
+          AND dv.doctor_AMKA = NEW.doctor_AMKA
+    ) THEN
+        SIGNAL SQLSTATE '45000'
+        SET MESSAGE_TEXT = 'Prescription rejected: patient and doctor must match the selected visit.';
+    END IF;
+END//
+
+CREATE TRIGGER prescriptions_visit_consistency_update
+BEFORE UPDATE ON prescriptions
+FOR EACH ROW
+BEGIN
+    IF NEW.visit_id IS NOT NULL AND NOT EXISTS (
+        SELECT 1
+        FROM doc_visits dv
+        WHERE dv.visit_id = NEW.visit_id
+          AND dv.patient_AMKA = NEW.patient_AMKA
+          AND dv.doctor_AMKA = NEW.doctor_AMKA
+    ) THEN
+        SIGNAL SQLSTATE '45000'
+        SET MESSAGE_TEXT = 'Prescription update rejected: patient and doctor must match the selected visit.';
+    END IF;
+END//
+
+DELIMITER ;
+
+DELIMITER //
+
+CREATE TRIGGER referrals_visit_consistency_insert
+BEFORE INSERT ON referrals
+FOR EACH ROW
+BEGIN
+    IF NEW.visit_id IS NOT NULL AND NOT EXISTS (
+        SELECT 1
+        FROM doc_visits dv
+        WHERE dv.visit_id = NEW.visit_id
+          AND dv.patient_AMKA = NEW.patient_AMKA
+          AND dv.doctor_AMKA = NEW.doctor_AMKA
+    ) THEN
+        SIGNAL SQLSTATE '45000'
+        SET MESSAGE_TEXT = 'Referral rejected: patient and doctor must match the selected visit.';
+    END IF;
+END//
+
+CREATE TRIGGER referrals_visit_consistency_update
+BEFORE UPDATE ON referrals
+FOR EACH ROW
+BEGIN
+    IF NEW.visit_id IS NOT NULL AND NOT EXISTS (
+        SELECT 1
+        FROM doc_visits dv
+        WHERE dv.visit_id = NEW.visit_id
+          AND dv.patient_AMKA = NEW.patient_AMKA
+          AND dv.doctor_AMKA = NEW.doctor_AMKA
+    ) THEN
+        SIGNAL SQLSTATE '45000'
+        SET MESSAGE_TEXT = 'Referral update rejected: patient and doctor must match the selected visit.';
+    END IF;
+END//
+
+DELIMITER ;
