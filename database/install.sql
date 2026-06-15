@@ -1,3 +1,4 @@
+SET NAMES utf8mb4;
 DROP DATABASE IF EXISTS biomed_db;
 CREATE DATABASE IF NOT EXISTS biomed_db;
 USE biomed_db;
